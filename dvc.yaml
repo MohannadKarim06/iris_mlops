@@ -1,0 +1,51 @@
+stages:
+  data_ingestion:
+    cmd: python src/data_ingestion.py 
+    params: 
+      - data_ingestion.dataset_url 
+      - data_ingestion.dataset_path
+    outs: 
+      - data/raw/iris.csv
+
+  data_preprocessing:
+    cmd: python src/data_preprocessing.py data/raw/iris.csv data/processed/train.csv data/processed/test.csv
+    deps:
+      - src/data_preprocessing.py
+      - data/raw/iris.csv
+    params:
+      - data_preprocessing.test_size
+      - data_preprocessing.random_state
+      - data_preprocessing.train_path
+      - data_preprocessing.test_path
+    outs:
+      - data/processed/train.csv
+      - data/processed/test.csv
+
+  train_model:
+    cmd: python src/train_model.py data/processed/train.csv models/model.pkl models/scaler.pkl
+    deps:
+      - src/train_model.py
+      - data/processed/train.csv
+    params:
+      - train.random_state
+      - train.algorithm
+      - train.hyperparameters
+      - train.model_path
+      - train.scaler_path
+    outs:
+      - models/model.pkl
+      - models/scaler.pkl
+    metrics:
+      - metrics/train_metrics.json
+
+  evaluate_model:
+    cmd: python src/evaluate_model.py models/model.pkl models/scaler.pkl data/processed/test.csv
+    deps: 
+      - src/evaluate_model.py
+      - models/model.pkl
+      - models/scaler.pkl
+      - data/processed/test.csv
+    params:
+      - evaluate.performance_threshold
+    metrics:
+      - metrics/eval_metrics.json

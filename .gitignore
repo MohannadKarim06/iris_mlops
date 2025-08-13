@@ -1,0 +1,24 @@
+# Data files (managed by DVC)
+/data/raw/
+/data/processed/
+/models/
+/metrics/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# DVC
+/dvc.lock
+
+# MLflow
+mlruns/
