@@ -27,8 +27,7 @@ jobs:
 
     - name: Run Tests 
       run: |
-        pytest tests/ -v
-
+        pytest --rootdir=. tests/ -v
     - name: Run data validation
       run: |
         python src/data_validation.py || echo "Data validation will run after data is processed"
