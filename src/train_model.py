@@ -27,7 +27,7 @@ def train_model(train_file, model_path, scaler_path):
 
     print("Starting Model Training...")
 
-    mlflow.set_experiament(mlflow_params["experiment_name"])
+    mlflow.set_experiment(mlflow_params["experiment_name"])
     with mlflow.start_run():
         # Prepare Data
         df = pd.read_csv(train_file)
