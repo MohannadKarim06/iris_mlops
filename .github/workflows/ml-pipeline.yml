@@ -27,6 +27,7 @@ jobs:
 
     - name: Run Tests 
       run: |
+        touch src/__init__.py
         pytest --rootdir=. tests/ -v
     - name: Run data validation
       run: |
