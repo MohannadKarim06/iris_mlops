@@ -63,6 +63,10 @@ def train_model(train_file, model_path, scaler_path):
             "n_samples": len(X_train_scaled)
         }
 
+        if not os.path.exists("metrics"):
+            os.makedirs("metrics")
+
+
         with open("metrics/train_metrics.json", "w") as f:
             json.dump(metrics, f, indent=2)
 

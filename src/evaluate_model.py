@@ -57,6 +57,11 @@ def evaluate_model(model_file, scaler_file, test_file):
         }
         mlflow.log_metrics(metrics)
 
+        
+        if not os.path.exists("metrics"):
+            os.makedirs("metrics")
+
+
         with open("metrics/eval_metrics.json", "w") as f:
             json.dump(metrics, f, indent=2)
 
