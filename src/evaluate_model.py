@@ -55,7 +55,16 @@ def evaluate_model(model_file, scaler_file, test_file):
             'n_test_samples': len(X_test),
             'meets_threshold': accuracy >= eval_params['performance_threshold']
         }
-        mlflow.log_metrics(metrics)
+
+        mlflow_metrics = {
+            'accuracy': float(accuracy),
+            'precision': float(precision),
+            'recall': float(recall),
+            'f1_score': float(f1),
+            'n_test_samples': len(X_test),
+        }
+
+        mlflow.log_metrics(mlflow_metrics)
 
         
         if not os.path.exists("metrics"):
