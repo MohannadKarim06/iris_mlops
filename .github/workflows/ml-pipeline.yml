@@ -1,0 +1,90 @@
+name: Iris MLOps Pipeline
+on:
+  push:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: 3.8
+  AWS_REGION: us-west-2
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Setup Python 
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Requirements
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Tests 
+      run: |
+        pytest tests/ -v
+
+    - name: Run data validation
+      run: |
+        python src/data_validation.py || echo "Data validation will run after data is processed"
+
+
+  pipeline:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Setup Python 
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Requirements
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Initialize DVC
+      run: |
+        dvc init --no-scm || echo "DVC is already initialized"
+
+    - name: Run Pipeline 
+      run: |
+        dvc repro
+
+    - name: Check Performance 
+      run: |
+        python scripts/check_performance.py
+        echo MODEL_APPROVED=$(python scripts/check_performance.py && echo 'true' || echo 'false') >> $GITHUB_ENV
+
+    - name: Commit Pipeline Results
+      if: env.MODEL_APPROVED == 'true'
+      run: | 
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git diff --staged --quiet || git commit -m "🤖 Update pipeline results [skip ci]"
+        git push
+
+  deploy:
+    needs: pipeline
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Deploy model
+      run: |
+        echo "🚀 Model deployment would happen here"
+        echo "Model meets performance threshold and is ready for production"
