@@ -27,7 +27,7 @@ stages:
       - src/train_model.py
       - data/processed/train.csv
     params:
-      - train.random_state
+      - train.hyperparameters.random_state
       - train.algorithm
       - train.hyperparameters
       - train.model_path
