@@ -71,6 +71,10 @@ def train_model(train_file, model_path, scaler_path):
             json.dump(metrics, f, indent=2)
 
         # Save Model and Scaler
+
+        if not os.path.exists("models"):
+            os.makedirs("models")
+
         joblib.dump(model, model_path)
         joblib.dump(scaler, scaler_path)
 
