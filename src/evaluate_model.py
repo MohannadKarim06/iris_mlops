@@ -48,7 +48,7 @@ def evaluate_model(model_file, scaler_file, test_file):
 
         # Save and Track Evaluation Metrics
         metrics = {
-            'accuracy': str(float(accuracy)),
+            'accuracy': float(accuracy),
             'precision': str(float(precision)),
             'recall': str(float(recall)),
             'f1_score': str(float(f1)),

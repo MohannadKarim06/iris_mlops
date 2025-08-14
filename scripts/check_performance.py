@@ -13,7 +13,7 @@ def check_performance_threshold():
         accuracy = metrics['accuracy']
         threshold = 0.90  # From params.yaml
         
-        meets_threshold = float(accuracy) >= threshold
+        meets_threshold = accuracy >= threshold
         
         print(f"Model accuracy: {accuracy:.4f}")
         print(f"Threshold: {threshold}")
