@@ -43,11 +43,8 @@ def preprocess_data(input_file, train_path, test_path):
     test_df = pd.concat([X_test, y_test], axis=1)
 
     # Save Train Test split
-    if not os.path.exists(train_path):
-        os.makedirs(train_path)
-
-    if not os.path.exists(train_path):
-        os.makedirs(train_path)
+    if not os.path.exists("data/processed"):
+        os.makedirs("data/processed")
 
     train_df.to_csv(train_path, index=False)
     test_df.to_csv(test_path, index=False)
