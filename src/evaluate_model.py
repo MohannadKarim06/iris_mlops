@@ -48,12 +48,12 @@ def evaluate_model(model_file, scaler_file, test_file):
 
         # Save and Track Evaluation Metrics
         metrics = {
-            'accuracy': float(accuracy),
-            'precision': float(precision),
-            'recall': float(recall),
-            'f1_score': float(f1),
-            'n_test_samples': len(X_test),
-            'meets_threshold': accuracy >= eval_params['performance_threshold']
+            'accuracy': str(float(accuracy)),
+            'precision': str(float(precision)),
+            'recall': str(float(recall)),
+            'f1_score': str(float(f1)),
+            'n_test_samples': str(len(X_test)),
+            'meets_threshold': str(accuracy >= eval_params['performance_threshold'])
         }
 
         mlflow_metrics = {
