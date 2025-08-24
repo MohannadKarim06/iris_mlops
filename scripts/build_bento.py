@@ -31,11 +31,7 @@ def build_bento_service():
     
     print(f"Model saved: {model_tag}")
     print(f"Scaler saved: {scaler_tag}")
-    
-    # Build the service
-    os.system("cd bentoml && bentoml build && cd ..")
-    
-    print("BentoML service built successfully!")
+        
 
 if __name__ == "__main__":
     build_bento_service()
