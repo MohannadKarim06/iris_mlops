@@ -1,4 +1,4 @@
-name: iris_classifier
+name: iris_classifier_service
 service: "service.py:iris_service"
 labels:
   version: "1.0.0"
