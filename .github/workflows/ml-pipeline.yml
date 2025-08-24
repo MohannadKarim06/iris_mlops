@@ -1,65 +1,36 @@
-name: Deploy BentoML Service
-
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-env:
-  AWS_REGION: eu-north-1
-  EKS_CLUSTER: iris-mlops-cluster
-
-jobs:
-  test-and-build:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.8'
-    
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-    
-    - name: Initialize DVC
-      run: |
-        dvc init --no-scm || echo "DVC is already initialized"
-
-    - name: Run Pipeline 
-      run: |
-        dvc repro
-    
-    - name: Build BentoML Service
+- name: Build BentoML Service
       run: |
         # Build models first
         python scripts/build_bento.py
         
-        # Clean up any existing BentoML store
-        rm -rf ~/.bentoml || true
-        
         # Navigate to bentoml directory and build
         cd bentoml
         
-        # Ensure models directory exists
+        # Copy required files
+        cp ../requirements.txt .
         mkdir -p models
-        cp -r ../models/* models/ || echo "No models to copy"
+        cp -r ../models/* models/
         
-        # Build BentoML service (remove --containerize flag)
-        bentoml build
+        # Build BentoML service and capture the tag from output
+        echo "Building BentoML service..."
+        BUILD_OUTPUT=$(bentoml build 2>&1)
+        echo "$BUILD_OUTPUT"
         
-        # Get the built service tag
-        BENTO_TAG=$(bentoml list -o json | jq -r '.[0].tag')
-        echo "Built Bento: $BENTO_TAG"
+        # Extract the tag from the build output
+        BENTO_TAG=$(echo "$BUILD_OUTPUT" | grep -o 'iris_classifier:[a-zA-Z0-9]*' | head -1)
+        echo "Extracted Bento tag: $BENTO_TAG"
+        
+        if [ -z "$BENTO_TAG" ]; then
+          echo "Failed to extract Bento tag"
+          exit 1
+        fi
         
         # Now containerize the built service
+        echo "Containerizing Bento service: $BENTO_TAG"
         bentoml containerize $BENTO_TAG
         
         cd ..
-
+        
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
