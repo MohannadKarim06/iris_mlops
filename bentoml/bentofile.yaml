@@ -1,12 +1,21 @@
-name: iris_classifier_service
-service: "service.py:iris_service"
+service: "service:iris_service"
 labels:
   version: "1.0.0"
   owner: "mlops-team"
+  environment: "production"
 
 include:
-  - "*.py"
+  - "service.py"
   - "models/"
+  - "requirements.txt"
 
 python:
   requirements_txt: "requirements.txt"
+
+docker:
+  distro: debian
+  python_version: "3.8"
+  system_packages:
+    - curl
+  env:
+    - PYTHONPATH=/usr/local/lib/python3.8/site-packages
