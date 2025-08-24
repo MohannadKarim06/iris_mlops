@@ -101,25 +101,25 @@ jobs:
         
         # Add current IAM user to aws-auth ConfigMap for cluster access
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-        IAM_USER_ARN="arn:aws:iam::${ACCOUNT_ID}:user/iris-mlops"
+        IAM_USER_ARN="arn:aws:iam::${ACCOUNT_ID}:user/your-github-user-name"
         
         # Try to get existing aws-auth configmap
         kubectl get configmap aws-auth -n kube-system -o yaml > aws-auth.yaml || {
           echo "Creating new aws-auth ConfigMap"
           cat <<EOF > aws-auth.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: aws-auth
-  namespace: kube-system
-data:
-  mapUsers: |
-    - userarn: ${IAM_USER_ARN}
-      username: github-actions
-      groups:
-        - system:masters
-EOF
-        }
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: aws-auth
+            namespace: kube-system
+          data:
+            mapUsers: |
+              - userarn: ${IAM_USER_ARN}
+                username: github-actions
+                groups:
+                  - system:masters
+          EOF
+                  }
         
         # Apply the aws-auth ConfigMap
         kubectl apply -f aws-auth.yaml
