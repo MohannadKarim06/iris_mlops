@@ -38,6 +38,9 @@ jobs:
         # Build models first
         python scripts/build_bento.py
         
+        # Clean BentoML store completely
+        rm -rf ~/.bentoml
+        
         # Navigate to bentoml directory and build
         cd bentoml
         
@@ -46,23 +49,9 @@ jobs:
         mkdir -p models
         cp -r ../models/* models/
         
-        # Build BentoML service and capture the tag from output
-        echo "Building BentoML service..."
-        BUILD_OUTPUT=$(bentoml build 2>&1)
-        echo "$BUILD_OUTPUT"
-        
-        # Extract the tag from the build output
-        BENTO_TAG=$(echo "$BUILD_OUTPUT" | grep -o 'iris_classifier:[a-zA-Z0-9]*' | head -1)
-        echo "Extracted Bento tag: $BENTO_TAG"
-        
-        if [ -z "$BENTO_TAG" ]; then
-          echo "Failed to extract Bento tag"
-          exit 1
-        fi
-        
-        # Now containerize the built service
-        echo "Containerizing Bento service: $BENTO_TAG"
-        bentoml containerize $BENTO_TAG
+        # Build and containerize in one step
+        echo "Building and containerizing BentoML service..."
+        bentoml build --containerize
         
         cd ..
         
