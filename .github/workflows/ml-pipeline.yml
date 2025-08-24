@@ -42,10 +42,17 @@ jobs:
         cp -r models bentoml/
         cp requirements.txt bentoml/
         
-        # Build BentoML service (from bentoml directory)
+        # Clean up any existing BentoML store
+        rm -rf ~/.bentoml
+        
+        # Build BentoML service with explicit tag
         cd bentoml
-        bentoml build
+        BENTO_TAG="iris_classifier:v1.0.$(date +%s)"
+        bentoml build --build-arg name=iris_classifier --build-arg version=v1.0.$(date +%s)
         cd ..
+        
+        # Store the tag for later use
+        echo "BENTO_TAG=$BENTO_TAG" >> $GITHUB_ENV
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -60,16 +67,23 @@ jobs:
     
     - name: Build and push Docker image
       run: |
-        # Get the latest BentoML tag
-        BENTO_TAG=$(bentoml list iris_classifier --output json | jq -r '.[0].tag')
+        # Use our stored tag or fall back to latest
+        if [ -z "$BENTO_TAG" ]; then
+          BENTO_TAG="iris_classifier:latest"
+        fi
         
-        # Build container (BentoML will generate its own Dockerfile)
-        bentoml containerize iris_classifier:latest
+        echo "Building with Bento tag: $BENTO_TAG"
+        
+        # Build container
+        bentoml containerize $BENTO_TAG
+        
+        # Get the actual docker image name
+        DOCKER_IMAGE=$(docker images --format "table {{.Repository}}:{{.Tag}}" | grep iris_classifier | head -1 | tr -s ' ')
         
         # Tag for ECR
         ECR_URI="${{ steps.login-ecr.outputs.registry }}/iris-bentoml"
-        docker tag iris_classifier:$BENTO_TAG $ECR_URI:${{ github.sha }}
-        docker tag iris_classifier:$BENTO_TAG $ECR_URI:latest
+        docker tag $DOCKER_IMAGE $ECR_URI:${{ github.sha }}
+        docker tag $DOCKER_IMAGE $ECR_URI:latest
         
         # Push to ECR
         docker push $ECR_URI:${{ github.sha }}
