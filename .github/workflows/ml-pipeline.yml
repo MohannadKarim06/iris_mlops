@@ -67,7 +67,7 @@ jobs:
     
     - name: Build and push Docker image
       run: |
-        BENTO_TAG="iris_classifier:latest"
+        BENTO_TAG="iris_classifier_service:latest"
         # Build container
         bentoml containerize $BENTO_TAG
         
