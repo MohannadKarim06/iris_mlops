@@ -23,7 +23,7 @@ echo "✅ Tools installed successfully!"
 
 # Deploy infrastructure
 echo "🏗️ Deploying Terraform infrastructure..."
-cd terraform
+cd terraform-scripts
 terraform init
 terraform plan
 terraform apply -auto-approve
