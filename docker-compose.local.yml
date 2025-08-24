@@ -1,0 +1,41 @@
+version: '3.8'
+services:
+  iris-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile.multi
+    ports:
+      - "3000:3000"
+    environment:
+      - PROMETHEUS_MULTIPROC_DIR=/tmp
+    volumes:
+      - ./models:/app/models
+      - ./bentoml:/app/bentoml
+
+  streamlit:
+    image: python:3.8-slim
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./streamlit:/app
+      - ./requirements.txt:/app/requirements.txt
+    working_dir: /app
+    command: >
+      sh -c "pip install -r requirements.txt && 
+             streamlit run app.py --server.address 0.0.0.0"
+    environment:
+      - API_BASE=http://iris-service:3000
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
