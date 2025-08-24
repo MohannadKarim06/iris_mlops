@@ -36,11 +36,13 @@ jobs:
     - name: Build BentoML Service
       run: |
         python scripts/build_bento.py
-        # Copy models to bentoml directory so they can be included
+        # Copy necessary files to bentoml directory
         cp -r models bentoml/
         cp requirements.txt bentoml/
-        # Build from root directory instead of bentoml subdirectory
-        bentoml build -f bentoml/bentofile.yaml
+        cp Dockerfile.multi bentoml/
+        # Change to bentoml directory and build
+        cd bentoml
+        bentoml build
 
         
     - name: Configure AWS credentials
