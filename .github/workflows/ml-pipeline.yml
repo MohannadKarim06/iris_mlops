@@ -36,8 +36,11 @@ jobs:
     - name: Build BentoML Service
       run: |
         python scripts/build_bento.py
-        cd bentoml 
-        bentoml build
+        # Copy models to bentoml directory so they can be included
+        cp -r models bentoml/
+        cp requirements.txt bentoml/
+        # Build from root directory instead of bentoml subdirectory
+        bentoml build -f bentoml/bentofile.yaml
 
         
     - name: Configure AWS credentials
@@ -54,6 +57,7 @@ jobs:
     - name: Build and push Docker image
       run: |
         # Get the latest BentoML tag
+        BENTO_TAG=$(bentoml list iris_classifier --output json | jq -r '.[0].tag')
         
         # Build container
         bentoml containerize iris_classifier:latest
