@@ -105,8 +105,8 @@ def predict_batch(batch: IrisBatch) -> dict:
         handle_failure()
         return {"error": str(e)}
 
-@iris_service.api(input=Text(), output=JSON())
-def health() -> dict:
+@iris_service.api(input=JSON(), output=JSON())
+def health(empty_input: dict = {}) -> dict:
     """Health check endpoint"""
     return {
         "status": "healthy",
