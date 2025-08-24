@@ -1,81 +1,17 @@
-name: Complete MLOps Pipeline
+name: Deploy MLOps Pipeline
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      destroy_infrastructure:
-        description: 'Destroy infrastructure after deployment (for testing)'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
 
 env:
   AWS_REGION: eu-north-1
   EKS_CLUSTER: iris-mlops-cluster
-  TF_VAR_region: eu-north-1
+  ECR_REPOSITORY: iris-bentoml
 
 jobs:
-  infrastructure:
-    runs-on: ubuntu-latest
-    outputs:
-      cluster_endpoint: ${{ steps.terraform.outputs.cluster_endpoint }}
-      ecr_repository_url: ${{ steps.terraform.outputs.ecr_repository_url }}
-      cluster_name: ${{ steps.terraform.outputs.cluster_name }}
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v2
-      with:
-        terraform_version: 1.6.0
-        terraform_wrapper: false
-    
-    - name: Terraform Init
-      run: |
-        cd terraform-scripts
-        terraform init
-    
-    - name: Terraform Plan
-      run: |
-        cd terraform-scripts
-        terraform plan -out=tfplan
-    
-    - name: Terraform Apply
-      id: terraform
-      run: |
-        cd terraform-scripts
-        terraform apply -auto-approve tfplan
-        
-        # Capture outputs
-        echo "cluster_endpoint=$(terraform output -raw cluster_endpoint)" >> $GITHUB_OUTPUT
-        echo "ecr_repository_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_OUTPUT
-        echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
-    
-    - name: Wait for EKS cluster to be ready
-      run: |
-        echo "Waiting for EKS cluster to be fully ready..."
-        aws eks wait cluster-active --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
-        
-        echo "Waiting for node group to be ready..."
-        aws eks wait nodegroup-active --cluster-name ${{ env.EKS_CLUSTER }} --nodegroup-name iris-nodes --region ${{ env.AWS_REGION }}
-        
-        echo "Infrastructure is ready!"
-
   build-and-deploy:
-    needs: infrastructure
     runs-on: ubuntu-latest
     
     steps:
@@ -145,8 +81,10 @@ jobs:
     
     - name: Build and push Docker image
       run: |
-        # Use the ECR URL from infrastructure job
-        ECR_URI="${{ needs.infrastructure.outputs.ecr_repository_url }}"
+        # Get ECR repository URI dynamically
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        ECR_URI="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}"
+        
         docker tag iris_classifier_service:latest $ECR_URI:${{ github.sha }}
         docker tag iris_classifier_service:latest $ECR_URI:latest
         
@@ -155,6 +93,7 @@ jobs:
         docker push $ECR_URI:latest
         
         echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
+        echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
     
     - name: Install and Configure kubectl
       run: |
@@ -163,7 +102,7 @@ jobs:
         chmod +x kubectl
         sudo mv kubectl /usr/local/bin/
         
-        # Configure kubectl - this should work since we're the cluster creator
+        # Configure kubectl
         aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
         
         # Test connection
@@ -179,16 +118,28 @@ jobs:
           --from-literal=secret-access-key=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
           --dry-run=client -o yaml | kubectl apply -f -
         
-        # Update image in deployment
-        export ECR_IMAGE="${{ env.ECR_URI }}:${{ github.sha }}"
-        export ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
-        export IMAGE_TAG="${{ github.sha }}"
-        envsubst < k8s/iris-service.yaml | kubectl apply -f -
+        # Get MLflow bucket name (assuming it follows the pattern)
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        # Try to find the bucket, or use a default pattern
+        MLFLOW_BUCKET=$(aws s3api list-buckets --query "Buckets[?starts_with(Name, 'iris-mlflow-artifacts')].Name" --output text | head -1)
+        if [ -z "$MLFLOW_BUCKET" ]; then
+          echo "Warning: MLflow bucket not found, using default pattern"
+          MLFLOW_BUCKET="iris-mlflow-artifacts-bucket"
+        fi
         
-        # Deploy other services
+        # Update image in deployment
+        export ECR_IMAGE="${{ env.ECR_URI }}:${{ env.IMAGE_TAG }}"
+        export ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+        export IMAGE_TAG="${{ env.IMAGE_TAG }}"
+        export MLFLOW_BUCKET_NAME="$MLFLOW_BUCKET"
+        
+        # Apply configurations with environment variable substitution
+        envsubst < k8s/iris-service.yaml | kubectl apply -f -
+        envsubst < k8s/mlflow.yaml | kubectl apply -f -
+        
+        # Deploy other services (no substitution needed)
         kubectl apply -f k8s/prometheus.yaml
         kubectl apply -f k8s/grafana.yaml
-        kubectl apply -f k8s/mlflow.yaml
         kubectl apply -f k8s/streamlit.yaml
         
         # Wait for deployment
@@ -196,111 +147,75 @@ jobs:
         
         echo "✅ Deployment completed"
     
-    - name: Install AWS Load Balancer Controller
+    - name: Get service information
       run: |
-        # Install ALB controller CRDs
-        kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller//crds?ref=master"
+        echo "🚀 Deployment Status:"
+        echo "===================="
         
-        # Get account ID and update the ALB controller YAML
-        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        # Show deployment status
+        kubectl get deployments
+        echo ""
         
-        # Create service account for ALB controller
-        cat <<EOF | kubectl apply -f -
-        apiVersion: v1
-        kind: ServiceAccount
-        metadata:
-          labels:
-            app.kubernetes.io/component: controller
-            app.kubernetes.io/name: aws-load-balancer-controller
-          name: aws-load-balancer-controller
-          namespace: kube-system
-          annotations:
-            eks.amazonaws.com/role-arn: arn:aws:iam::${ACCOUNT_ID}:role/AmazonEKSLoadBalancerControllerRole
-        EOF
+        # Show services
+        kubectl get services
+        echo ""
         
-        # Install ALB controller using Helm
-        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-        chmod 700 get_helm.sh
-        ./get_helm.sh
+        # Show pods
+        kubectl get pods
+        echo ""
         
-        helm repo add eks https://aws.github.io/eks-charts
-        helm repo update
+        echo "🔍 Service URLs (may take a few minutes to be ready):"
+        echo "=================================================="
         
-        helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-          -n kube-system \
-          --set clusterName=${{ env.EKS_CLUSTER }} \
-          --set serviceAccount.create=false \
-          --set serviceAccount.name=aws-load-balancer-controller || \
-          echo "ALB Controller installation failed, continuing without it"
+        # Function to get LoadBalancer URL
+        get_lb_url() {
+          local service_name=$1
+          local port=$2
+          local hostname=$(kubectl get svc $service_name -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
+          if [ "$hostname" != "pending" ] && [ "$hostname" != "" ]; then
+            if [ "$port" != "" ]; then
+              echo "http://${hostname}:${port}"
+            else
+              echo "http://${hostname}"
+            fi
+          else
+            echo "Pending... (check again in a few minutes)"
+          fi
+        }
+        
+        echo "Iris API:    $(get_lb_url iris-service)"
+        echo "Streamlit:   $(get_lb_url streamlit 8501)"
+        echo "Grafana:     $(get_lb_url grafana 3000) (admin/admin123)"
+        echo "Prometheus:  $(get_lb_url prometheus 9090)"
+        echo "MLflow:      $(get_lb_url mlflow 5000)"
     
-    - name: Get service URLs
+    - name: Test API endpoint
       run: |
-        echo "Waiting for LoadBalancer IPs..."
+        echo "⏳ Waiting for services to be ready..."
         sleep 120
         
-        echo "🚀 Service URLs:"
+        # Get the LoadBalancer hostname
+        IRIS_LB=$(kubectl get svc iris-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
         
-        # Get LoadBalancer hostnames
-        IRIS_LB=$(kubectl get svc iris-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "pending")
-        STREAMLIT_LB=$(kubectl get svc streamlit -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "pending")
-        GRAFANA_LB=$(kubectl get svc grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "pending")
-        PROMETHEUS_LB=$(kubectl get svc prometheus -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "pending")
-        
-        echo "Iris API: http://${IRIS_LB}"
-        echo "Streamlit: http://${STREAMLIT_LB}:8501"
-        echo "Grafana: http://${GRAFANA_LB}:3000 (admin/admin123)"
-        echo "Prometheus: http://${PROMETHEUS_LB}:9090"
-        
-        # Save URLs as outputs
-        echo "IRIS_URL=http://${IRIS_LB}" >> $GITHUB_ENV
-        echo "STREAMLIT_URL=http://${STREAMLIT_LB}:8501" >> $GITHUB_ENV
-        echo "GRAFANA_URL=http://${GRAFANA_LB}:3000" >> $GITHUB_ENV
-        echo "PROMETHEUS_URL=http://${PROMETHEUS_LB}:9090" >> $GITHUB_ENV
-    
-    - name: Test deployment
-      run: |
-        # Wait a bit more for services to be ready
-        sleep 60
-        
-        # Test the API endpoint
-        IRIS_LB=$(kubectl get svc iris-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-        
-        if [ "$IRIS_LB" != "" ] && [ "$IRIS_LB" != "pending" ]; then
-          echo "Testing API endpoint..."
+        if [ "$IRIS_LB" != "" ] && [ "$IRIS_LB" != "null" ]; then
+          echo "🧪 Testing API endpoint: http://${IRIS_LB}"
+          
+          # Test health endpoint
+          echo "Testing health endpoint..."
+          curl -f "http://${IRIS_LB}/health" && echo "" || echo "Health check failed"
+          
+          # Test prediction endpoint
+          echo "Testing prediction endpoint..."
           curl -X POST "http://${IRIS_LB}/predict_single" \
             -H "Content-Type: application/json" \
             -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}' \
-            || echo "API test failed, but continuing..."
+            && echo "" || echo "Prediction test failed"
+            
+          echo "✅ API tests completed"
         else
-          echo "LoadBalancer not ready yet"
+          echo "⚠️  LoadBalancer not ready yet. Check the service URLs manually in a few minutes."
         fi
         
-        echo "🎉 Deployment completed successfully!"
-
-  cleanup:
-    needs: [infrastructure, build-and-deploy]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.destroy_infrastructure == 'true' }}
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v2
-      with:
-        terraform_version: 1.6.0
-    
-    - name: Terraform Destroy
-      run: |
-        cd terraform-scripts
-        terraform init
-        terraform destroy -auto-approve
-        
-        echo "🧹 Infrastructure destroyed"
+        echo ""
+        echo "🎉 MLOps pipeline deployment completed successfully!"
+        echo "📊 Access your services using the URLs shown above."
