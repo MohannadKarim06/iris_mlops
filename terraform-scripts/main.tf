@@ -148,8 +148,8 @@ resource "aws_eks_node_group" "iris_nodes" {
   subnet_ids      = aws_subnet.public[*].id
 
   scaling_config {
-    desired_size = 2
-    max_size     = 4
+    desired_size = 1  # ✅ Reduced for free tier
+    max_size     = 2  # ✅ Reduced for free tier
     min_size     = 1
   }
 
@@ -157,7 +157,10 @@ resource "aws_eks_node_group" "iris_nodes" {
     max_unavailable = 1
   }
 
-  instance_types = ["t3.medium"]
+  instance_types = ["t3.micro"]  # ✅ Free tier eligible
+  
+  # Add this for better resource management
+  capacity_type = "ON_DEMAND"
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
