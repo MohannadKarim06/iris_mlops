@@ -1,3 +1,4 @@
+name: iris_classifier
 service: "service:iris_service"
 labels:
   version: "1.0.0"
