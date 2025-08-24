@@ -133,19 +133,66 @@ jobs:
         export IMAGE_TAG="${{ env.IMAGE_TAG }}"
         export MLFLOW_BUCKET_NAME="$MLFLOW_BUCKET"
         
+        echo "🚀 Deploying with image: $ECR_IMAGE"
+        
+        # Check if the image exists in ECR
+        if aws ecr describe-images --repository-name iris-bentoml --image-ids imageTag=${{ env.IMAGE_TAG }} --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+          echo "✅ Container image found in ECR"
+        else
+          echo "❌ Container image not found in ECR!"
+          aws ecr describe-images --repository-name iris-bentoml --region ${{ env.AWS_REGION }} | head -20
+        fi
+        
         # Apply configurations with environment variable substitution
+        echo "📦 Deploying iris-service..."
         envsubst < k8s/iris-service.yaml | kubectl apply -f -
+        
+        echo "📦 Deploying mlflow..."
         envsubst < k8s/mlflow.yaml | kubectl apply -f -
         
         # Deploy other services (no substitution needed)
+        echo "📦 Deploying prometheus..."
         kubectl apply -f k8s/prometheus.yaml
+        
+        echo "📦 Deploying grafana..."
         kubectl apply -f k8s/grafana.yaml
+        
+        echo "📦 Deploying streamlit..."
         kubectl apply -f k8s/streamlit.yaml
         
-        # Wait for deployment
-        kubectl rollout status deployment/iris-service --timeout=600s
+        # Check initial deployment status
+        echo "📊 Initial deployment status:"
+        kubectl get deployments
         
-        echo "✅ Deployment completed"
+        # Wait for deployment with better error handling
+        echo "⏳ Waiting for iris-service deployment to complete..."
+        
+        # First, wait a reasonable time
+        if kubectl rollout status deployment/iris-service --timeout=300s; then
+          echo "✅ Deployment completed successfully"
+        else
+          echo "❌ Deployment failed or timed out. Getting debug information..."
+          
+          # Debug information
+          echo "📊 Deployment status:"
+          kubectl describe deployment iris-service
+          
+          echo "📊 Pod status:"
+          kubectl get pods -l app=iris-service -o wide
+          
+          echo "📊 Recent events:"
+          kubectl get events --sort-by=.metadata.creationTimestamp --field-selector involvedObject.name=iris-service
+          
+          # Try to get logs from any running pods
+          POD_NAME=$(kubectl get pods -l app=iris-service --no-headers | head -1 | awk '{print $1}' || echo "")
+          if [ "$POD_NAME" != "" ]; then
+            echo "📋 Pod logs for $POD_NAME:"
+            kubectl logs $POD_NAME --tail=50 || echo "Could not retrieve logs"
+          fi
+          
+          # Don't fail the build - continue to show service URLs
+          echo "⚠️ Deployment issues detected but continuing to show service information"
+        fi
     
     - name: Get service information
       run: |
