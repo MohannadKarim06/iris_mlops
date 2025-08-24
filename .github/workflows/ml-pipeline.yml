@@ -118,7 +118,7 @@ jobs:
                 username: github-actions
                 groups:
                   - system:masters
-          EOF
+        EOF
                   }
         
         # Apply the aws-auth ConfigMap
