@@ -48,7 +48,7 @@ jobs:
         # Build BentoML service with explicit tag
         cd bentoml
         BENTO_TAG="iris_classifier:v1.0.$(date +%s)"
-        bentoml build --build-arg name=iris_classifier --build-arg version=v1.0.$(date +%s)
+        bentoml build
         cd ..
         
         # Store the tag for later use
