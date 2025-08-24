@@ -22,7 +22,9 @@ spec:
           - -c
           - |
             pip install mlflow boto3 psycopg2-binary
-            mlflow server --host 0.0.0.0 --port 5000 --default-artifact-root s3://your-mlflow-bucket/artifacts
+            # Use environment variable for bucket name
+            BUCKET_NAME=${MLFLOW_BUCKET_NAME:-iris-mlflow-artifacts-default}
+            mlflow server --host 0.0.0.0 --port 5000 --default-artifact-root s3://${BUCKET_NAME}/artifacts
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -34,6 +36,17 @@ spec:
             secretKeyRef:
               name: aws-secret
               key: secret-access-key
+        - name: AWS_DEFAULT_REGION
+          value: "eu-north-1"
+        - name: MLFLOW_BUCKET_NAME
+          value: "${MLFLOW_BUCKET_NAME}"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
 
 ---
 apiVersion: v1
