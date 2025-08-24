@@ -1,4 +1,39 @@
-- name: Build BentoML Service
+name: Deploy BentoML Service
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: eu-north-1
+  EKS_CLUSTER: iris-mlops-cluster
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.8'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Initialize DVC
+      run: |
+        dvc init --no-scm || echo "DVC is already initialized"
+
+    - name: Run Pipeline 
+      run: |
+        dvc repro
+    
+    - name: Build BentoML Service
       run: |
         # Build models first
         python scripts/build_bento.py
