@@ -96,8 +96,39 @@ jobs:
         # Configure kubectl
         aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
         
+        # Get current AWS identity
+        aws sts get-caller-identity
+        
+        # Add current IAM user to aws-auth ConfigMap for cluster access
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        IAM_USER_ARN="arn:aws:iam::${ACCOUNT_ID}:user/iris-mlops"
+        
+        # Try to get existing aws-auth configmap
+        kubectl get configmap aws-auth -n kube-system -o yaml > aws-auth.yaml || {
+          echo "Creating new aws-auth ConfigMap"
+          cat <<EOF > aws-auth.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-auth
+  namespace: kube-system
+data:
+  mapUsers: |
+    - userarn: ${IAM_USER_ARN}
+      username: github-actions
+      groups:
+        - system:masters
+EOF
+        }
+        
+        # Apply the aws-auth ConfigMap
+        kubectl apply -f aws-auth.yaml
+        
+        # Wait a moment for permissions to propagate
+        sleep 10
+        
         # Test kubectl connection
-        kubectl get nodes || { echo "kubectl authentication failed"; exit 1; }
+        kubectl get nodes || { echo "kubectl authentication still failed"; exit 1; }
         
         # Create AWS secret for MLflow
         kubectl create secret generic aws-secret \
@@ -108,17 +139,17 @@ jobs:
             --from-literal=access-key-id=${{ secrets.AWS_ACCESS_KEY_ID }} \
             --from-literal=secret-access-key=${{ secrets.AWS_SECRET_ACCESS_KEY }}
         
-        # Update image in deployment with validation disabled
+        # Update image in deployment
         export ECR_IMAGE="${{ env.ECR_URI }}:${{ github.sha }}"
         export ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
         export IMAGE_TAG="${{ github.sha }}"
-        envsubst < k8s/iris-service.yaml | kubectl apply -f - --validate=false
+        envsubst < k8s/iris-service.yaml | kubectl apply -f -
         
-        # Deploy other services with validation disabled
-        kubectl apply -f k8s/prometheus.yaml --validate=false
-        kubectl apply -f k8s/grafana.yaml --validate=false
-        kubectl apply -f k8s/mlflow.yaml --validate=false
-        kubectl apply -f k8s/streamlit.yaml --validate=false
+        # Deploy other services
+        kubectl apply -f k8s/prometheus.yaml
+        kubectl apply -f k8s/grafana.yaml
+        kubectl apply -f k8s/mlflow.yaml
+        kubectl apply -f k8s/streamlit.yaml
         
         # Wait for deployment
         kubectl rollout status deployment/iris-service --timeout=300s
