@@ -67,13 +67,7 @@ jobs:
     
     - name: Build and push Docker image
       run: |
-        # Use our stored tag or fall back to latest
-        if [ -z "$BENTO_TAG" ]; then
-          BENTO_TAG="iris_classifier:latest"
-        fi
-        
-        echo "Building with Bento tag: $BENTO_TAG"
-        
+        BENTO_TAG="iris_classifier:latest"
         # Build container
         bentoml containerize $BENTO_TAG
         
