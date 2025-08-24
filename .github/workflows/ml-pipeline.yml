@@ -38,18 +38,27 @@ jobs:
         # Build models first
         python scripts/build_bento.py
         
-        # Copy all necessary files to bentoml directory
-        cp -r models bentoml/
-        cp requirements.txt bentoml/
-        
         # Clean up any existing BentoML store
-        rm -rf ~/.bentoml
+        rm -rf ~/.bentoml || true
         
-        # Build BentoML service with explicit tag
+        # Navigate to bentoml directory and build
         cd bentoml
-        bentoml build --containerize        
-        cd ..
         
+        # Ensure models directory exists
+        mkdir -p models
+        cp -r ../models/* models/ || echo "No models to copy"
+        
+        # Build BentoML service (remove --containerize flag)
+        bentoml build
+        
+        # Get the built service tag
+        BENTO_TAG=$(bentoml list -o json | jq -r '.[0].tag')
+        echo "Built Bento: $BENTO_TAG"
+        
+        # Now containerize the built service
+        bentoml containerize $BENTO_TAG
+        
+        cd ..
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -64,9 +73,9 @@ jobs:
     
     - name: Build and push Docker image
       run: |
-        
         # Get the actual docker image name
-        DOCKER_IMAGE=$(docker images --format "table {{.Repository}}:{{.Tag}}" | grep iris_classifier_service | head -1 | tr -s ' ')
+        DOCKER_IMAGE=$(docker images --format "table {{.Repository}}:{{.Tag}}" | grep iris_classifier_service | head -1 | awk '{print $1":"$2}')
+        echo "Docker image: $DOCKER_IMAGE"
         
         # Tag for ECR
         ECR_URI="${{ steps.login-ecr.outputs.registry }}/iris-bentoml"
@@ -92,6 +101,8 @@ jobs:
         
         # Update image in deployment
         export ECR_IMAGE="${{ env.ECR_URI }}:${{ github.sha }}"
+        export ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+        export IMAGE_TAG="${{ github.sha }}"
         envsubst < k8s/iris-service.yaml | kubectl apply -f -
         
         # Deploy other services
