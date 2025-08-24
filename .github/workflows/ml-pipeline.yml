@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-west-2
+  AWS_REGION: eu-north-1
   EKS_CLUSTER: iris-mlops-cluster
 
 jobs:
