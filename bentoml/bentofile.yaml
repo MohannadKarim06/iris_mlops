@@ -12,7 +12,3 @@ python:
   
 docker:
   dockerfile_template: "../Dockerfile.multi"
-
-monitoring:
-  enabled: true
-  port: 3000
