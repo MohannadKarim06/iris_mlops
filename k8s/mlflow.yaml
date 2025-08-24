@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      containers:
+      - name: mlflow
+        image: python:3.8-slim
+        ports:
+        - containerPort: 5000
+        command: ["/bin/bash"]
+        args: 
+          - -c
+          - |
+            pip install mlflow boto3 psycopg2-binary
+            mlflow server --host 0.0.0.0 --port 5000 --default-artifact-root s3://your-mlflow-bucket/artifacts
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-secret
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-secret
+              key: secret-access-key
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+spec:
+  selector:
+    app: mlflow
+  ports:
+  - port: 5000
+    targetPort: 5000
+  type: LoadBalancer

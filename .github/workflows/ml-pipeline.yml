@@ -1,58 +1,30 @@
-name: Iris MLOps Pipeline
+name: Deploy BentoML Service
+
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
+  workflow_dispatch:
 
 env:
-  PYTHON_VERSION: 3.8
   AWS_REGION: us-west-2
+  EKS_CLUSTER: iris-mlops-cluster
 
 jobs:
-  test:
+  test-and-build:
     runs-on: ubuntu-latest
-
+    
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
-
-    - name: Setup Python 
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
       uses: actions/setup-python@v3
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Requirements
+        python-version: '3.8'
+    
+    - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
         pip install -r requirements.txt
-
-    - name: Run Tests 
-      run: |
-        touch src/__init__.py
-        pytest --rootdir=. tests/ -v
-    - name: Run data validation
-      run: |
-        python src/data_validation.py || echo "Data validation will run after data is processed"
-
-
-  pipeline:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
-
-    - name: Setup Python 
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Requirements
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
+    
     - name: Initialize DVC
       run: |
         dvc init --no-scm || echo "DVC is already initialized"
@@ -60,31 +32,73 @@ jobs:
     - name: Run Pipeline 
       run: |
         dvc repro
-
-    - name: Check Performance 
-      run: |
-        python scripts/check_performance.py
-        echo MODEL_APPROVED=$(python scripts/check_performance.py && echo 'true' || echo 'false') >> $GITHUB_ENV
-
-    - name: Commit Pipeline Results
-      if: env.MODEL_APPROVED == 'true'
-      run: | 
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add .
-        git diff --staged --quiet || git commit -m "🤖 Update pipeline results [skip ci]"
-        git push
-
-  deploy:
-    needs: pipeline
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Deploy model
+    - name: Build BentoML Service
       run: |
-        echo "🚀 Model deployment would happen here"
-        echo "Model meets performance threshold and is ready for production"
+        python scripts/build_bento.py
+        
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Login to ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    
+    - name: Build and push Docker image
+      run: |
+        # Get the latest BentoML tag
+        BENTO_TAG=$(bentoml list iris_classifier --output json | jq -r '.[0].tag')
+        echo "Building Bento: $BENTO_TAG"
+        
+        # Build container
+        bentoml containerize iris_classifier:$BENTO_TAG
+        
+        # Tag for ECR
+        ECR_URI="${{ steps.login-ecr.outputs.registry }}/iris-bentoml"
+        docker tag iris_classifier:$BENTO_TAG $ECR_URI:${{ github.sha }}
+        docker tag iris_classifier:$BENTO_TAG $ECR_URI:latest
+        
+        # Push to ECR
+        docker push $ECR_URI:${{ github.sha }}
+        docker push $ECR_URI:latest
+        
+        echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
+    
+    - name: Deploy to EKS
+      run: |
+        # Configure kubectl
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+        
+        # Create AWS secret for MLflow
+        kubectl create secret generic aws-secret \
+          --from-literal=access-key-id=${{ secrets.AWS_ACCESS_KEY_ID }} \
+          --from-literal=secret-access-key=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Update image in deployment
+        export ECR_IMAGE="${{ env.ECR_URI }}:${{ github.sha }}"
+        envsubst < k8s/iris-service.yaml | kubectl apply -f -
+        
+        # Deploy other services
+        kubectl apply -f k8s/prometheus.yaml
+        kubectl apply -f k8s/grafana.yaml
+        kubectl apply -f k8s/mlflow.yaml
+        kubectl apply -f k8s/streamlit.yaml
+        
+        # Wait for deployment
+        kubectl rollout status deployment/iris-service --timeout=300s
+        
+    - name: Get service URLs
+      run: |
+        echo "Waiting for LoadBalancer IPs..."
+        sleep 60
+        
+        echo "🚀 Service URLs:"
+        echo "Iris API: http://$(kubectl get svc iris-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+        echo "Streamlit: http://$(kubectl get svc streamlit -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):8501"
+        echo "Grafana: http://$(kubectl get svc grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):3000"
+        echo "Prometheus: http://$(kubectl get svc prometheus -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):9090"

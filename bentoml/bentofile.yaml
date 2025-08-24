@@ -1,0 +1,18 @@
+service: "service.py:iris_service"
+labels:
+  version: "1.0.0"
+  owner: "mlops-team"
+
+include:
+  - "*.py"
+  - "../models/"
+
+python:
+  requirements_txt: "../requirements.txt"
+  
+docker:
+  dockerfile_template: "../Dockerfile.multi"
+
+monitoring:
+  enabled: true
+  port: 3000

@@ -1,0 +1,18 @@
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'your-email@gmail.com'
+  smtp_auth_username: 'your-email@gmail.com'
+  smtp_auth_password: 'your-app-password'
+
+route:
+  receiver: 'email-alerts'
+
+receivers:
+  - name: 'email-alerts'
+    email_configs:
+      - to: 'alerts@yourcompany.com'
+        subject: 'MLOps Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Service: {{ .GroupLabels.job }}
+          Alert: {{ .GroupLabels.alertname }}
+          Status: {{ .Status }}

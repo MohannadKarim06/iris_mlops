@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iris-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: iris-service
+  template:
+    metadata:
+      labels:
+        app: iris-service
+    spec:
+      containers:
+      - name: iris-container
+        image: ${ECR_REGISTRY}/iris-bentoml:${IMAGE_TAG}
+        ports:
+        - containerPort: 3000
+        env:
+        - name: PROMETHEUS_MULTIPROC_DIR
+          value: "/tmp"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iris-service
+spec:
+  selector:
+    app: iris-service
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: LoadBalancer
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: iris-ingress
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: iris-service
+            port:
+              number: 80
