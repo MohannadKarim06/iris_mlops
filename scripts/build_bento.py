@@ -33,7 +33,7 @@ def build_bento_service():
     print(f"Scaler saved: {scaler_tag}")
     
     # Build the service
-    os.system("cd bentoml && bentoml build")
+    os.system("cd bentoml && bentoml build && cd ..")
     
     print("BentoML service built successfully!")
 
