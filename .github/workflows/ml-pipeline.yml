@@ -110,15 +110,17 @@ jobs:
         
         echo "✅ kubectl configured successfully"
     
-    - name: Deploy to EKS (Minimal Services)
+    - name: Deploy to EKS (Iris Service Only)
       run: |
         # Update image in deployment
         export ECR_IMAGE="${{ env.ECR_URI }}:${{ env.IMAGE_TAG }}"
         export ECR_REGISTRY="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
         export IMAGE_TAG="${{ env.IMAGE_TAG }}"
         
-        # Deploy only Iris service and Streamlit UI
+        # Deploy ONLY Iris service
         envsubst < k8s/iris-service.yaml | kubectl apply -f -
+        
+        # COMMENTED OUT - Streamlit UI (can be enabled later)
         # kubectl apply -f k8s/streamlit.yaml
         
         # COMMENTED OUT - Other services for portfolio reference
@@ -126,16 +128,15 @@ jobs:
         # kubectl apply -f k8s/prometheus.yaml
         # kubectl apply -f k8s/grafana.yaml
         
-        # Wait for deployment
+        # Wait for ONLY the Iris service deployment
         kubectl rollout status deployment/iris-service --timeout=600s
-        kubectl rollout status deployment/streamlit --timeout=600s
         
-        echo "✅ Minimal deployment completed"
+        echo "✅ Iris service deployment completed"
     
     - name: Get service information
       run: |
-        echo "🚀 Deployment Status (Minimal Services Only):"
-        echo "============================================="
+        echo "🚀 Deployment Status (Iris Service Only):"
+        echo "========================================="
         
         # Show deployment status
         kubectl get deployments
@@ -155,30 +156,25 @@ jobs:
         # Function to get LoadBalancer URL
         get_lb_url() {
           local service_name=$1
-          local port=$2
           local hostname=$(kubectl get svc $service_name -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
           if [ "$hostname" != "pending" ] && [ "$hostname" != "" ]; then
-            if [ "$port" != "" ]; then
-              echo "http://${hostname}:${port}"
-            else
-              echo "http://${hostname}"
-            fi
+            echo "http://${hostname}"
           else
             echo "Pending... (check again in a few minutes)"
           fi
         }
         
         echo "Iris API:    $(get_lb_url iris-service)"
-        echo "Streamlit:   $(get_lb_url streamlit 8501)"
         echo ""
-        echo "# COMMENTED OUT FOR PORTFOLIO - Available in full deployment:"
-        echo "# Grafana:     $(get_lb_url grafana 3000) (admin/admin123)"
-        echo "# Prometheus:  $(get_lb_url prometheus 9090)"
-        echo "# MLflow:      $(get_lb_url mlflow 5000)"
+        echo "# AVAILABLE BUT NOT DEPLOYED (for portfolio reference):"
+        echo "# Streamlit UI: Available in k8s/streamlit.yaml"
+        echo "# Grafana Dashboard: Available in k8s/grafana.yaml"
+        echo "# Prometheus Metrics: Available in k8s/prometheus.yaml"
+        echo "# MLflow Tracking: Available in k8s/mlflow.yaml"
     
     - name: Test API endpoint
       run: |
-        echo "⏳ Waiting for services to be ready..."
+        echo "⏳ Waiting for Iris service to be ready..."
         sleep 120
         
         # Get the LoadBalancer hostname
@@ -199,12 +195,18 @@ jobs:
             && echo "" || echo "Prediction test failed"
             
           echo "✅ API tests completed"
+          echo ""
+          echo "🎯 API Documentation:"
+          echo "GET  http://${IRIS_LB}/health"
+          echo "POST http://${IRIS_LB}/predict_single"
+          echo "POST http://${IRIS_LB}/predict_batch"
+          
         else
-          echo "⚠️  LoadBalancer not ready yet. Check the service URLs manually in a few minutes."
+          echo "⚠️  LoadBalancer not ready yet. Check the service URL manually in a few minutes."
         fi
         
         echo ""
-        echo "🎉 Minimal MLOps pipeline deployment completed successfully!"
-        echo "📊 Access your services using the URLs shown above."
-        echo "💡 This is a minimal deployment for portfolio demonstration."
-        echo "💡 Full monitoring stack (Grafana, Prometheus, MLflow) available in code but not deployed."
+        echo "🎉 Iris ML API deployment completed successfully!"
+        echo "📊 Your ML API is now live and ready to serve predictions!"
+        echo "💡 This is a minimal deployment focusing on the core ML service."
+        echo "💡 Full stack (UI, monitoring, etc.) available in codebase for portfolio showcase."
