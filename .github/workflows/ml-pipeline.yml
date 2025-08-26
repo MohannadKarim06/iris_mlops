@@ -119,7 +119,7 @@ jobs:
         
         # Deploy only Iris service and Streamlit UI
         envsubst < k8s/iris-service.yaml | kubectl apply -f -
-        kubectl apply -f k8s/streamlit.yaml
+        # kubectl apply -f k8s/streamlit.yaml
         
         # COMMENTED OUT - Other services for portfolio reference
         # envsubst < k8s/mlflow.yaml | kubectl apply -f -
