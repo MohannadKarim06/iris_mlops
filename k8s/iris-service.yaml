@@ -2,67 +2,162 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: iris-service
+  labels:
+    app: iris-service
+    version: "1.0"
 spec:
-  replicas: 2
+  replicas: 1  # ✅ Single replica to avoid resource issues
   selector:
     matchLabels:
       app: iris-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Ensure service stays available during updates
   template:
     metadata:
       labels:
         app: iris-service
+        version: "1.0"
     spec:
       containers:
       - name: iris-container
         image: ${ECR_REGISTRY}/iris-bentoml:${IMAGE_TAG}
         ports:
         - containerPort: 3000
+          name: http
         env:
         - name: PROMETHEUS_MULTIPROC_DIR
           value: "/tmp"
+        - name: PYTHONPATH
+          value: "/app"
+        
+        # ✅ Health checks for reliability
         livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 60    # Give more time for startup
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
           httpGet:
             path: /health
             port: 3000
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # ✅ Very minimal resources for t3.micro node
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
+            memory: "100Mi"   # Reduced even further
+            cpu: "100m"       # 0.1 CPU cores
           limits:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "200Mi"   # Conservative limit
+            cpu: "200m"       # 0.2 CPU cores max
+        
+        # ✅ Security and operational settings
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # BentoML needs write access
+        
+        # ✅ Volume for temp files
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      
+      # ✅ Ensure pod runs on available nodes
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      
+      # ✅ Tolerate node issues
+      tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: iris-service
+  labels:
+    app: iris-service
 spec:
   selector:
     app: iris-service
   ports:
-  - port: 80
+  - name: http
+    port: 80
     targetPort: 3000
+    protocol: TCP
   type: LoadBalancer
+  # ✅ Session affinity for better performance
+  sessionAffinity: ClientIP
 
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: iris-ingress
-  annotations:
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-spec:
-  rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: iris-service
-            port:
-              number: 80
+# ✅ Optional: Horizontal Pod Autoscaler (commented out for minimal deployment)
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: iris-service-hpa
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: iris-service
+#   minReplicas: 1
+#   maxReplicas: 3
+#   metrics:
+#   - type: Resource
+#     resource:
+#       name: cpu
+#       target:
+#         type: Utilization
+#         averageUtilization: 70
+#   - type: Resource
+#     resource:
+#       name: memory
+#       target:
+#         type: Utilization
+#         averageUtilization: 80
+
+---
+# COMMENTED OUT - ALB Ingress for cost optimization
+# Use this if you want to avoid LoadBalancer costs and use ALB instead
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: iris-ingress
+#   annotations:
+#     kubernetes.io/ingress.class: alb
+#     alb.ingress.kubernetes.io/scheme: internet-facing
+#     alb.ingress.kubernetes.io/target-type: ip
+#     alb.ingress.kubernetes.io/healthcheck-path: /health
+# spec:
+#   rules:
+#   - http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: iris-service
+#             port:
+#               number: 80
