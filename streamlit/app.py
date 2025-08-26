@@ -20,7 +20,7 @@ with st.sidebar:
     st.info("Model: Random Forest\nVersion: v1.0\nAccuracy: 95%+")
     
     # Grafana link
-    st.markdown("📊 [View Grafana Dashboard](http://your-grafana-url)")
+#    st.markdown("📊 [View Grafana Dashboard](http://your-grafana-url)")
 
 # API endpoint
 API_BASE = "http://your-alb-url"  # Replace with actual ALB URL
