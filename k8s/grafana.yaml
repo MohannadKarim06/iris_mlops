@@ -31,7 +31,7 @@ spec:
         image: grafana/grafana:latest
         ports:
         - containerPort: 3000
-        resources:          # ✅ ADD THIS SECTION
+        resources:        
           requests:
             memory: "128Mi"
             cpu: "50m"

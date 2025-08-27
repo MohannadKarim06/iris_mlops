@@ -6,7 +6,7 @@ metadata:
     app: iris-service
     version: "1.0"
 spec:
-  replicas: 1  # ✅ Single replica to avoid resource issues
+  replicas: 1  #Single replica to avoid resource issues
   selector:
     matchLabels:
       app: iris-service
@@ -14,7 +14,7 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 0  # Ensure service stays available during updates
+      maxUnavailable: 0
   template:
     metadata:
       labels:
@@ -33,7 +33,7 @@ spec:
         - name: PYTHONPATH
           value: "/app"
         
-        # ✅ Health checks for reliability
+
         livenessProbe:
           httpGet:
             path: /health
@@ -52,23 +52,22 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 3
         
-        # ✅ Very minimal resources for t3.micro node
         resources:
           requests:
-            memory: "100Mi"   # Reduced even further
-            cpu: "100m"       # 0.1 CPU cores
+            memory: "100Mi"   
+            cpu: "100m"
           limits:
-            memory: "200Mi"   # Conservative limit
-            cpu: "200m"       # 0.2 CPU cores max
+            memory: "200Mi"   
+            cpu: "200m"       
         
-        # ✅ Security and operational settings
+        # Security and operational settings
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false  # BentoML needs write access
         
-        # ✅ Volume for temp files
+        # Volume for temp files
         volumeMounts:
         - name: tmp
           mountPath: /tmp
@@ -77,11 +76,11 @@ spec:
       - name: tmp
         emptyDir: {}
       
-      # ✅ Ensure pod runs on available nodes
+      # Ensure pod runs on available nodes
       nodeSelector:
         kubernetes.io/arch: amd64
       
-      # ✅ Tolerate node issues
+      # Tolerate node issues
       tolerations:
       - key: "node.kubernetes.io/not-ready"
         operator: "Exists"
@@ -108,56 +107,7 @@ spec:
     targetPort: 3000
     protocol: TCP
   type: LoadBalancer
-  # ✅ Session affinity for better performance
+  # Session affinity for better performance
   sessionAffinity: ClientIP
 
 ---
-# ✅ Optional: Horizontal Pod Autoscaler (commented out for minimal deployment)
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: iris-service-hpa
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: iris-service
-#   minReplicas: 1
-#   maxReplicas: 3
-#   metrics:
-#   - type: Resource
-#     resource:
-#       name: cpu
-#       target:
-#         type: Utilization
-#         averageUtilization: 70
-#   - type: Resource
-#     resource:
-#       name: memory
-#       target:
-#         type: Utilization
-#         averageUtilization: 80
-
----
-# COMMENTED OUT - ALB Ingress for cost optimization
-# Use this if you want to avoid LoadBalancer costs and use ALB instead
-# apiVersion: networking.k8s.io/v1
-# kind: Ingress
-# metadata:
-#   name: iris-ingress
-#   annotations:
-#     kubernetes.io/ingress.class: alb
-#     alb.ingress.kubernetes.io/scheme: internet-facing
-#     alb.ingress.kubernetes.io/target-type: ip
-#     alb.ingress.kubernetes.io/healthcheck-path: /health
-# spec:
-#   rules:
-#   - http:
-#       paths:
-#       - path: /
-#         pathType: Prefix
-#         backend:
-#           service:
-#             name: iris-service
-#             port:
-#               number: 80

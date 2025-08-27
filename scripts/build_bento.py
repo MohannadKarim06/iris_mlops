@@ -21,7 +21,7 @@ def build_bento_service():
             raise FileNotFoundError(f"Scaler file not found: {scaler_path}")
         
         # Load trained model and scaler
-        print("📂 Loading model and scaler...")
+        print("Loading model and scaler...")
         model = joblib.load(model_path)
         scaler = joblib.load(scaler_path)
         
@@ -29,7 +29,7 @@ def build_bento_service():
         print(f"Scaler type: {type(scaler)}")
         
         # Save model to BentoML store
-        print("💾 Saving model to BentoML store...")
+        print("Saving model to BentoML store...")
         model_tag = bentoml.sklearn.save_model(
             name="iris_classifier",
             model=model,
@@ -47,7 +47,7 @@ def build_bento_service():
         )
         
         # Save scaler separately
-        print("💾 Saving scaler to BentoML store...")
+        print("Saving scaler to BentoML store...")
         scaler_tag = bentoml.sklearn.save_model(
             name="iris_scaler", 
             model=scaler,
@@ -58,11 +58,11 @@ def build_bento_service():
             metadata={"type": "StandardScaler"}
         )
         
-        print(f"✅ Model saved: {model_tag}")
-        print(f"✅ Scaler saved: {scaler_tag}")
+        print(f"Model saved: {model_tag}")
+        print(f"Scaler saved: {scaler_tag}")
         
         # List saved models for verification
-        print("\n📋 Available models in BentoML store:")
+        print("\nAvailable models in BentoML store:")
         try:
             models = bentoml.models.list()
             for model in models:
@@ -74,7 +74,7 @@ def build_bento_service():
         return True
         
     except Exception as e:
-        print(f"❌ Error building BentoML service: {str(e)}")
+        print(f"Error building BentoML service: {str(e)}")
         import traceback
         traceback.print_exc()
         return False

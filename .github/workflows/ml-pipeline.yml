@@ -108,7 +108,7 @@ jobs:
         # Test connection
         kubectl get nodes
         
-        echo "✅ kubectl configured successfully"
+        echo "kubectl configured successfully"
     
     - name: Deploy to EKS (Iris Service Only)
       run: |
@@ -131,11 +131,11 @@ jobs:
         # Wait for ONLY the Iris service deployment
         kubectl rollout status deployment/iris-service --timeout=600s
         
-        echo "✅ Iris service deployment completed"
+        echo "Iris service deployment completed"
     
     - name: Get service information
       run: |
-        echo "🚀 Deployment Status (Iris Service Only):"
+        echo "Deployment Status (Iris Service Only):"
         echo "========================================="
         
         # Show deployment status
@@ -150,7 +150,7 @@ jobs:
         kubectl get pods
         echo ""
         
-        echo "🔍 Service URLs (may take a few minutes to be ready):"
+        echo "Service URLs (may take a few minutes to be ready):"
         echo "=================================================="
         
         # Function to get LoadBalancer URL
@@ -181,7 +181,7 @@ jobs:
         IRIS_LB=$(kubectl get svc iris-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
         
         if [ "$IRIS_LB" != "" ] && [ "$IRIS_LB" != "null" ]; then
-          echo "🧪 Testing API endpoint: http://${IRIS_LB}"
+          echo "Testing API endpoint: http://${IRIS_LB}"
           
           # Test health endpoint
           echo "Testing health endpoint..."
@@ -194,19 +194,19 @@ jobs:
             -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}' \
             && echo "" || echo "Prediction test failed"
             
-          echo "✅ API tests completed"
+          echo "API tests completed"
           echo ""
-          echo "🎯 API Documentation:"
+          echo "API Documentation:"
           echo "GET  http://${IRIS_LB}/health"
           echo "POST http://${IRIS_LB}/predict_single"
           echo "POST http://${IRIS_LB}/predict_batch"
           
         else
-          echo "⚠️  LoadBalancer not ready yet. Check the service URL manually in a few minutes."
+          echo "LoadBalancer not ready yet. Check the service URL manually in a few minutes."
         fi
         
         echo ""
-        echo "🎉 Iris ML API deployment completed successfully!"
-        echo "📊 Your ML API is now live and ready to serve predictions!"
-        echo "💡 This is a minimal deployment focusing on the core ML service."
-        echo "💡 Full stack (UI, monitoring, etc.) available in codebase for portfolio showcase."
+        echo "Iris ML API deployment completed successfully!"
+        echo "Your ML API is now live and ready to serve predictions!"
+        echo "This is a minimal deployment focusing on the core ML service."
+        echo "Full stack (UI, monitoring, etc.) available in codebase for portfolio showcase."
