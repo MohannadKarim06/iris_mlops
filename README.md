@@ -33,9 +33,9 @@ This project demonstrates a **production-ready MLOps pipeline** for iris flower 
 - **Scalable Infrastructure**: Auto-scaling, load balancing, and fault tolerance
 - **Data Versioning**: DVC integration for reproducible experiments
 
-![Alt Text](images/Capture1.png)
+![Alt Text](images/Capture1.PNG)
 
-![Alt Text](images/Capture2.png)
+![Alt Text](images/Capture2.PNG)
 
 ## 🏗️ Architecture
 
